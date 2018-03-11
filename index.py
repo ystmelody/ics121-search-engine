@@ -13,8 +13,8 @@ database = {}
 title_index = {}
 high_tier = {}
 low_tier = {}
-folder_num = 20
-file_num =50
+folder_num = 75
+file_num =500
 Count = 0
 filter_list = ['body', 'title', 'h1', 'h2', 'h3', 'b', 'strong']
 Length = {} #doc : doc length(used in vector cosine normalization)
@@ -118,9 +118,12 @@ def main():
     
     for i in range(folder_num):
         #print("-------- Folder ", i, "--------")
+        if i == 74:
+            global file_num
+            file_num = 497
         for j in range(file_num):
             p_file_path = str(i)+"/"+str(j)
-
+            
             if is_valid(urls[p_file_path]):
                 file_path = "WEBPAGES_RAW/"+p_file_path
                 fop = open(file_path, 'r')
