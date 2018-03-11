@@ -7,13 +7,14 @@ from urlparse import urlparse
 import json
 import re
 import math
+from stop_words import get_stop_words
 
 database = {}
 title_index = {}
 high_tier = {}
 low_tier = {}
-folder_num = 2
-file_num =500
+folder_num = 20
+file_num =50
 Count = 0
 filter_list = ['body', 'title', 'h1', 'h2', 'h3', 'b', 'strong']
 Length = {} #doc : doc length(used in vector cosine normalization)
@@ -66,7 +67,8 @@ def tokenize(soup):
         #substitute a white space for all non-alphanumeric characters 
         terms = w.split(  )#words is  a list of all words in a line
         for term in terms:
-            word_bag.append(term)
+            if term not in get_stop_words('english'):
+                word_bag.append(term)
     return word_bag
 
 def tokenize_title(soup):
@@ -76,7 +78,8 @@ def tokenize_title(soup):
         #substitute a white space for all non-alphanumeric characters 
         terms = w.split(  )#words is  a list of all words in a line
         for term in terms:
-            title_bag.append(term)
+            if term not in get_stop_words('english'):
+                title_bag.append(term)
     return title_bag
 
 #def tokenize_bold(soup):
@@ -93,7 +96,22 @@ def build_tier():
         sorted_tf_posting = sorted(posting.items(),key = lambda v : -v[1])
         high_tier[term] = sorted_tf_posting[:20]
         low_tier[term] = sorted_tf_posting[20:]
-    
+
+def handle_json_file():
+    with open("high_tier.json", "w") as file:
+        json.dump(high_tier, file, indent=4)
+    file.close()
+    with open("low_tier.json", "w") as file:
+        json.dump(low_tier, file, indent=4)
+    file.close()
+
+    with open("title_index.json","w") as file:
+        json.dump(title_index, file, indent=4)
+    file.close()
+    with open("length.json", "w") as file:
+        json.dump(Length, file, indent=4)
+    file.close()
+
 def main():
     with open("WEBPAGES_RAW/bookkeeping.json", "r") as op2:
         urls = json.load(op2)
@@ -120,19 +138,15 @@ def main():
         
         tf_idf()
         build_tier()
+        handle_json_file()
 
 start = time.time()
 main()
 end = time.time()
 
-import json
-with open("index.json", "w") as file:
-    json.dump(database, file, indent=4)
-file.close()
 
-with open("title_index.json","w") as file:
-    json.dump(title_index, file, indent=4)
-file.close()
+
+
 
 print("Time: ", end - start)
 print('Count: ',Count)
