@@ -2,7 +2,7 @@ import sys
 import json
 import math
 from stop_words import get_stop_words
-N = 257355
+N = 128678
 #N is the unique words in the dictionary
 K = 10
 #K is the number of ranked results returned for each query
@@ -36,22 +36,37 @@ def query_tf_idf(query,high_tier,low_tier):
     #Normalize the query length, used for cosine_score calculation.
     return (qdict,query_length)
 
-def cosine_score(pool,q_tf,query_length,high_tier,Length):
+def cosine_score(pool,q_tf,query_length,high_tier,low_tier,Length):
     score = {}
-    for w,tf in q_tf:
- #        qdict[w] = tf/query_length
-        for doc,tf_d in high_tier[w]:
+    print(q_tf)
+    for term in q_tf:
+        w =term[0]
+        tf_q = term[1]
+        #print(w)
+        if low_tier[w][0][1] < 2:
+            low =[]
+        else:
+            low= low_tier[w]
+        for dtf in high_tier[w]+low:
+            doc = dtf[0]
+            tf_d = dtf[1]
             if doc in pool:
                 if doc not in score:
-                    score[doc] = q_tf[w]*tf_d
+                    score[doc] = tf_q * tf_d
                 else:
-                    score[doc] += q_tf[w]*tf_d
+                    score[doc] += tf_q*tf_d
     for doc,sc in score.iteritems():
         score[doc] = sc/Length[doc]/query_length
     sorted_score = sorted(score.items(),key = lambda v: v[1],reverse = True)
+    return sorted_score
+
+def retrieve_k_doc(score):
     doc_list = []
-    for i in range(K):
-        doc_list.append(sorted_score[i][0])
+    if len(score) >= K:
+        for i in range(K):
+            doc_list.append(score[i][0])
+    else:
+        doc_list = [score[i][0] for i in range(len(score))]
     return doc_list
 
 def single_term_retrieval(high_tier,title_index,query,urls):
@@ -69,25 +84,28 @@ def single_term_retrieval(high_tier,title_index,query,urls):
         else:
             left_out.append(results[i][0])
     for i in range(K-count):
-        print(urls[leftout[i]])
+        print(urls[left_out[i]])
 
 def muliple_terms_retrieval(high_tier,low_tier,title_index,query,Length,urls):
         q_tf,query_length = query_tf_idf(query,high_tier,low_tier)
         #calculate the tf-idf score for all terms in query.
-        q_tf = sorted(q_tf,key = lambda v:v[1],reverse=True)
+        q_tf = sorted(q_tf.items(),key = lambda v:-v[1])
         #sort tf-idf for query terms, so we consider the most important (rare) term first in
         #determining whether or not that document should be into the pool.
         pool = []
         pool_intersect = []
-        eliminated =[ [] for i in len(q_tf)]
+        eliminated =[ [] for i in range(len(q_tf))]
         #pool of the candidates for K documents
-        i = 0
-        for term,tf in q_tf:               
-            ht = high_tier[term]
-            ti = title_index[term]
-            pool[i] = set([ht[i][0] for i in len(ht)] )| set([ti[i][0] for i in len(ti)])
-            i+=1
-            
+        #i=0
+        for term in q_tf:               
+            ht = high_tier[term[0]]
+            ti = title_index[term[0]]
+            #print(ti)
+            pool_ht = set([ht[j][0] for j in range(len(ht))] )
+            pool_ti = set([doc for doc in ti])
+            pool.append(pool_ht.union(pool_ti))
+            #i+=1
+
         for doc in pool[0]:
             in_the_pool = True
             for i in range(1,len(q_tf)):
@@ -97,19 +115,27 @@ def muliple_terms_retrieval(high_tier,low_tier,title_index,query,Length,urls):
                     break
             if in_the_pool:
                 pool_intersect.append(doc)
-        if len(pool_interesect) >= K:
-            doc_list = cosine_score(pool_intersect,q_tf,query_length,high_tier,Length)
+        if len(pool_intersect) >= K:
+            #print("pool_intersect",pool_intersect)
+            score = cosine_score(pool_intersect,q_tf,query_length,high_tier,low_tier,Length)
+            doc_list = retrieve_k_doc(score)
             print_final_result(doc_list,urls)
         else:
             for i in range(len(eliminated)-1,-1,-1):
-                pool_intersect += eliminated[i] 
-            pool_intersect = pool_intersect[:K]
-            doc_list = cosine_score(pool_intersect,q_tf,query_length,high_tier,Length)
+                pool_intersect += eliminated[i]
+            #print("pool_intersect",pool_intersect)
+            #pool_intersect = pool_intersect[:K]
+            #print("pool_intersect",pool_intersect)
+            score = cosine_score(pool_intersect[:30],q_tf,query_length,high_tier,low_tier,Length)
+            doc_list = retrieve_k_doc(score)
+            if len(doc_list) < 10:
+                doc_set = set(doc_list).union(set(pool_intersect[:10]))
+                doc_list = list(doc_set)
             print_final_result(doc_list,urls)
 
 def ask_for_continue():
-    print("Continue? y/n")
-    if sys.argv[0] == "n" or sys.argv[0] == "no":
+    ans = raw_input("Continue? y/n")
+    if ans == "n" or ans == "no":
         return False
     else:
         return True
@@ -128,16 +154,18 @@ def main():
 
     Continue = True
     while (Continue):
-        print("Please enter the search query: ")
-        query = sys.argv[1:]
-        print(query)
-        query = preprocess(query)
-        print(query)
-        #lowercase all query terms, eliminate all stop words,
-        if len(query) == 1:
-            single_term_retrieval(high_tier,title_index,query,urls)           
-        else:
-            muliple_terms_retrieval(high_tier,low_tier,title_index,query,Length,urls)
+        try:
+            query = raw_input("Please enter the search query: ").split()
+            query = preprocess(query)
+            #print(query)
+            #lowercase all query terms, eliminate all stop words,
+            if len(query) == 1:
+                single_term_retrieval(high_tier,title_index,query,urls)           
+            else:
+                muliple_terms_retrieval(high_tier,low_tier,title_index,query,Length,urls)
+        except:
+            print("Invalid query")
+            
         Continue = ask_for_continue()
     fh.close()
     fl.close()
